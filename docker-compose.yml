@@ -1,0 +1,46 @@
+services:
+
+  ingestion:
+    build: ./ingestion
+    env_file: .env
+    depends_on:
+      - kafka
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      CLUSTER_ID: hitlab-cluster-001
+
+  transform:
+    build: ./transform
+    env_file: .env
+    depends_on:
+      - kafka
+      - timescaledb
+
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    environment:
+      POSTGRES_USER: hitlab
+      POSTGRES_PASSWORD: hitlab
+      POSTGRES_DB: hitlab
+    volumes:
+      - timescaledb_data:/var/lib/postgresql/data
+
+  dashboard:
+    build: ./dashboard
+    env_file: .env
+    ports:
+      - "8501:8501"
+    depends_on:
+      - timescaledb
+
+volumes:
+  timescaledb_data:

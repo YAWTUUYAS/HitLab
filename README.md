@@ -40,9 +40,6 @@ hype_score = (
 )
 ```
 
-> *Disclaimer: the music industry has been trying to crack this formula for decades.
-> HitLab is just more honest about it.*
-
 ---
 
 ## Experiment Setup
@@ -82,13 +79,6 @@ Last.fm API ──┘    (goroutines)                    (hit formula)          
 
 ---
 
-## Results
-
-<!-- Add a screenshot of your dashboard here -->
-> *Experiment no. 001 · Formula v0.1 · Results may vary*
-
----
-
 ## Lab Structure
 
 ```
@@ -112,13 +102,9 @@ hitlab/
 
 ---
 
-## CV Description
+## Results
 
-**Short version**
-> HitLab — Real-time music trend pipeline · Go microservice ingesting 50K+ events/day from Spotify & Last.fm APIs via concurrent goroutines · Kafka message broker · Python transformation layer computing a proprietary "hit formula" score · TimescaleDB · Streamlit dashboard · fully containerized with Docker Compose
-
-**Narrative version**
-> Built HitLab, a real-time data pipeline that decodes the formula behind viral music. A Go service fetches trending tracks across 10 countries in parallel (goroutines), feeds a Kafka topic, Python computes a hype score from velocity + geo spread, stored in TimescaleDB and visualized live on a Streamlit dashboard. Fully containerized with Docker Compose.
+<!-- Add a screenshot of your dashboard here -->
 
 ---
 

@@ -6,9 +6,9 @@
 ```
  ___________
 |  ≡  ≡  ≡  |   C₁₂H₂₂O₁₁
-|           |   velocity × geo_spread × replay_rate
+|           |   listeners × geo_spread × velocity
 |   ~~~~~   |   ————————————————————————————————————
-|___________|   hype_score = f(Δstreams, countries, t)
+|___________|   hype_score = f(reach, countries, t)
      | |
 ```
 
@@ -21,12 +21,12 @@ computes a proprietary **hit formula** score, and surfaces emerging tracks befor
 
 | Component          | Role                                              | Dose                   |
 |--------------------|---------------------------------------------------|------------------------|
-| **Go**             | Concurrent API ingestion (Spotify + Last.fm)      | 50K+ events/day        |
+| **Go**             | Concurrent ingestion from Last.fm                 | 100+ events / 5 min    |
 | **Kafka**          | Message broker between ingestion & transform      | 1 topic · 3 partitions |
 | **Python**         | Hit formula computation + normalization           | pandas · numpy         |
 | **TimescaleDB**    | Time-series storage                               | 7-day retention        |
 | **Streamlit**      | Live dashboard + time travel mode                 | —                      |
-| **Docker Compose** | Full stack orchestration                          | 5 services             |
+| **Docker Compose** | Full stack orchestration                          | 4 services             |
 
 ---
 
@@ -34,9 +34,9 @@ computes a proprietary **hit formula** score, and surfaces emerging tracks befor
 
 ```python
 hype_score = (
-    velocity      * 0.40 +   # Δstreams / hour
-    geo_spread    * 0.35 +   # number of countries trending
-    replay_rate   * 0.25     # avg replays per listener
+    reach        * 0.40 +   # log-scaled listeners
+    geo_spread   * 0.40 +   # number of countries trending
+    velocity     * 0.20     # change in listeners over time
 )
 ```
 
@@ -51,7 +51,7 @@ cd hitlab
 
 # Step 2 — add your reagents (API keys)
 cp .env.example .env
-# fill in SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, LASTFM_API_KEY
+# fill in LASTFM_API_KEY
 
 # Step 3 — run the experiment
 docker compose up
@@ -64,17 +64,16 @@ docker compose up
 ## Architecture
 
 ```
-Spotify API ──┐
-              ├──▶  Go ingestion  ──▶  Kafka  ──▶  Python transform  ──▶  TimescaleDB  ──▶  Streamlit
-Last.fm API ──┘    (goroutines)                    (hit formula)          (time-series)      (dashboard)
+Last.fm API ──▶  Go ingestion  ──▶  Kafka  ──▶  Python transform  ──▶  TimescaleDB  ──▶  Streamlit
+                 (goroutines)                    (hit formula)          (time-series)      (dashboard)
 ```
 
 ### Lab notes
 
-- **Go service** fetches featured playlists across 10 countries in parallel using goroutines + `sync.WaitGroup`
+- **Go service** fetches `geo.getTopTracks` for 10 countries in parallel using goroutines + `sync.WaitGroup`
 - **Kafka** decouples ingestion from processing — the lab never loses a data point
-- **Python consumer** normalizes track events and computes the hype score every 5 minutes
-- **TimescaleDB** stores time-series data with automatic compression
+- **Python consumer** aggregates events, computes the hype score, and persists results
+- **TimescaleDB** stores time-series data with automatic compression and hypertable partitioning
 - **Streamlit dashboard** shows live top tracks, hype score evolution, and a "time travel" mode to replay past trends
 
 ---
@@ -89,8 +88,10 @@ hitlab/
 │   ├── Dockerfile
 │   ├── go.mod
 │   ├── main.go
-│   └── spotify/
-│       └── client.go
+│   ├── lastfm/
+│   │   └── client.go
+│   └── track/
+│       └── track.go
 ├── transform/              # Python consumer
 │   ├── Dockerfile
 │   ├── requirements.txt

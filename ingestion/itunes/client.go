@@ -1,40 +1,31 @@
 // Package itunes enriches tracks with iTunes Search metadata (genre, release date).
-// No auth required — public API. Rate-limited to ~20 req/min per Apple's guidelines.
+// No auth required — public API.
+//
+// TODO: re-introduce a rate limiter (golang.org/x/time/rate, ~18 req/min) for production.
+// Removed during dev to keep the ingestion cycle fast; iTunes occasionally returns 429
+// which is currently swallowed by the caller.
 package itunes
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
-
-	"golang.org/x/time/rate"
 
 	"github.com/yourname/hitlab/ingestion/track"
 )
 
 type Client struct {
 	httpClient *http.Client
-	limiter    *rate.Limiter
 }
 
-// NewClient builds an iTunes client with a token-bucket limiter.
-// Apple recommends max 20 req/min for the Search API; we set 18 to leave headroom.
 func NewClient() *Client {
-	return &Client{
-		httpClient: &http.Client{},
-		limiter:    rate.NewLimiter(rate.Limit(18.0/60.0), 5), // 18/min, burst of 5
-	}
+	return &Client{httpClient: &http.Client{}}
 }
 
 // Enrich looks up a track on iTunes and adds genre + release date.
-// Mutates t in-place. Blocks if the rate limit is full.
+// Mutates t in-place. No-op if the track isn't found.
 func (c *Client) Enrich(t *track.Track) error {
-	if err := c.limiter.Wait(context.Background()); err != nil {
-		return fmt.Errorf("itunes rate limiter: %w", err)
-	}
-
 	term := fmt.Sprintf("%s %s", t.Artist, t.Name)
 	endpoint := fmt.Sprintf(
 		"https://itunes.apple.com/search?term=%s&media=music&entity=song&limit=1",

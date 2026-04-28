@@ -20,7 +20,7 @@ import (
 
 var countries = []string{"US", "GB", "FR", "DE", "BR", "MX", "NG", "JP", "ES", "AU"}
 
-const enrichWorkers = 10
+const enrichWorkers = 5
 
 func main() {
 	if err := godotenv.Load(); err != nil {

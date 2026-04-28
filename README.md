@@ -21,7 +21,7 @@ computes a proprietary **hit formula** score, and surfaces emerging tracks befor
 
 | Component          | Role                                              | Dose                   |
 |--------------------|---------------------------------------------------|------------------------|
-| **Go**             | Concurrent ingestion from Last.fm                 | 100+ events / 5 min    |
+| **Go**             | Concurrent ingestion (Last.fm) + multi-source enrichment (Deezer, iTunes) | 100+ events / 5 min |
 | **Kafka**          | Message broker between ingestion & transform      | 1 topic · 3 partitions |
 | **Python**         | Hit formula computation + normalization           | pandas · numpy         |
 | **TimescaleDB**    | Time-series storage                               | 7-day retention        |
@@ -34,9 +34,10 @@ computes a proprietary **hit formula** score, and surfaces emerging tracks befor
 
 ```python
 hype_score = (
-    reach        * 0.40 +   # log-scaled listeners
-    geo_spread   * 0.40 +   # number of countries trending
-    velocity     * 0.20     # change in listeners over time
+    reach         * 0.30 +   # log-scaled listeners (Last.fm)
+    geo_spread    * 0.25 +   # number of countries trending
+    deezer_rank   * 0.25 +   # streaming popularity (Deezer)
+    velocity      * 0.20     # change in reach over time
 )
 ```
 
@@ -64,13 +65,16 @@ docker compose up
 ## Architecture
 
 ```
-Last.fm API ──▶  Go ingestion  ──▶  Kafka  ──▶  Python transform  ──▶  TimescaleDB  ──▶  Streamlit
-                 (goroutines)                    (hit formula)          (time-series)      (dashboard)
+Last.fm API ──┐
+Deezer API  ──┼──▶  Go ingestion  ──▶  Kafka  ──▶  Python transform  ──▶  TimescaleDB  ──▶  Streamlit
+iTunes API  ──┘    (goroutines +                   (hit formula)          (time-series)      (dashboard)
+                    worker pool)
 ```
 
 ### Lab notes
 
-- **Go service** fetches `geo.getTopTracks` for 10 countries in parallel using goroutines + `sync.WaitGroup`
+- **Go service** fetches `geo.getTopTracks` from Last.fm for 10 countries in parallel using goroutines + `sync.WaitGroup`
+- **Multi-source enrichment** — each track is enriched in parallel via Deezer (popularity rank, duration, preview URL) and iTunes (genre, release date) using a worker pool
 - **Kafka** decouples ingestion from processing — the lab never loses a data point
 - **Python consumer** aggregates events, computes the hype score, and persists results
 - **TimescaleDB** stores time-series data with automatic compression and hypertable partitioning
@@ -88,9 +92,13 @@ hitlab/
 │   ├── Dockerfile
 │   ├── go.mod
 │   ├── main.go
-│   ├── lastfm/
+│   ├── lastfm/             # primary source
 │   │   └── client.go
-│   └── track/
+│   ├── deezer/             # popularity enrichment
+│   │   └── client.go
+│   ├── itunes/             # metadata enrichment
+│   │   └── client.go
+│   └── track/              # canonical Track type
 │       └── track.go
 ├── transform/              # Python consumer
 │   ├── Dockerfile

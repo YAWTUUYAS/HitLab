@@ -31,7 +31,7 @@ KAFKA_TOPIC = os.getenv("KAFKA_TOPIC", "track-events")
 DB_URL = os.getenv("TIMESCALEDB_URL", "postgres://hitlab:hitlab@localhost:5432/hitlab")
 
 BATCH_SIZE = 50          # flush every N messages...
-BATCH_TIMEOUT_S = 30     # ...or every T seconds, whichever comes first
+BATCH_TIMEOUT_S = 10     # ...or every T seconds, whichever comes first
 
 
 def compute_hype_score(listeners: int, geo_spread: int, deezer_rank: int) -> float:

@@ -3,3 +3,7 @@ __pycache__/
 *.pyc
 *.pyo
 ingestion/ingestion
+.run_logs/
+transform/venv/
+dashboard/venv/
+.claude

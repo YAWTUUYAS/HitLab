@@ -1,5 +1,5 @@
-streamlit==1.34.0
-psycopg2-binary==2.9.9
-pandas==2.2.2
-plotly==5.22.0
-python-dotenv==1.0.1
+streamlit>=1.40
+psycopg2-binary>=2.9.10
+pandas>=2.2.2
+plotly>=5.22.0
+python-dotenv>=1.0.1

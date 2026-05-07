@@ -41,8 +41,8 @@ func main() {
 
 	for {
 		ingest(lf, dz, it, writer)
-		log.Println("sleeping 5 minutes...")
-		time.Sleep(5 * time.Minute)
+		log.Println("sleeping 1 minute...")
+		time.Sleep(1 * time.Minute)
 	}
 }
 

@@ -1,14 +1,16 @@
 """
-View renderers — one function per dashboard mode.
+View renderers — one render_* function per section, one page_* function per page.
 """
 from __future__ import annotations
+
+from datetime import timedelta
 
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-from . import theme
+from . import db, features, theme
 from .assets import render_template, load_template
 
 
@@ -285,3 +287,73 @@ def render_insights(latest: pd.DataFrame) -> None:
 
 def render_how_it_works() -> None:
     render_template("how_it_works")
+
+
+# ──────────────────────────────────────────────────────────────────────────
+# PAGE WRAPPERS  (called by st.navigation in app.py)
+# ──────────────────────────────────────────────────────────────────────────
+
+
+def _load_data() -> tuple[pd.DataFrame, pd.DataFrame, pd.Timestamp]:
+    """Shared data loading block rendered at the top of every data page."""
+    bounds = db.db_bounds()
+    if not bounds or not bounds[0]:
+        st.warning("No data available yet — the pipeline may still be warming up.")
+        st.stop()
+
+    db_min = bounds[0].replace(tzinfo=None)
+    db_max = bounds[1].replace(tzinfo=None)
+
+    st.markdown("## Historical range")
+    start, end = st.slider(
+        "Time range",
+        min_value=db_min,
+        max_value=db_max,
+        value=(max(db_min, db_max - timedelta(hours=1)), db_max),
+        format="MMM DD • HH:mm",
+    )
+
+    raw = db.load_data(start, end)
+    if raw.empty:
+        st.warning("No data found in this range.")
+        st.stop()
+
+    df, latest, latest_t = features.engineer(raw)
+
+    k1, k2, k3, k4, k5 = st.columns(5)
+    k1.metric("Events",       f"{len(df):,}")
+    k2.metric("Tracks",       f"{latest.shape[0]:,}")
+    k3.metric("Countries",    f"{df['country'].nunique()}")
+    k4.metric("Average hype", f"{latest['hype_score'].mean():.1f}")
+    k5.metric("Updated",      latest_t.strftime("%H:%M:%S"))
+
+    st.divider()
+    return df, latest, latest_t
+
+
+def _footer(latest_t: pd.Timestamp, latest: pd.DataFrame) -> None:
+    st.divider()
+    render_insights(latest)
+    st.caption(f"Last updated • {latest_t.strftime('%Y-%m-%d %H:%M:%S UTC')}")
+
+
+def page_overview() -> None:
+    df, latest, latest_t = _load_data()
+    render_overview(df, latest, latest_t)
+    _footer(latest_t, latest)
+
+
+def page_forecast() -> None:
+    df, latest, latest_t = _load_data()
+    render_forecast(latest)
+    _footer(latest_t, latest)
+
+
+def page_track_details() -> None:
+    df, latest, latest_t = _load_data()
+    render_track_details(df, latest)
+    _footer(latest_t, latest)
+
+
+def page_how_it_works() -> None:
+    render_how_it_works()

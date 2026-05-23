@@ -150,11 +150,11 @@ p, span, label, div { color: var(--text) !important; }
     font-weight: 600 !important;
 }
 
-/* RADIO BUTTONS */
+/* RADIO BUTTONS — main content */
 
-.stRadio [role="radiogroup"] { gap: 0.8rem; }
+[data-testid="stMain"] .stRadio [role="radiogroup"] { gap: 0.8rem; }
 
-.stRadio label {
+[data-testid="stMain"] .stRadio label {
     background: white !important;
     border: 1px solid var(--border) !important;
     padding: 0.65rem 1rem !important;
@@ -162,8 +162,8 @@ p, span, label, div { color: var(--text) !important; }
     transition: 0.2s ease;
 }
 
-.stRadio label:hover { border-color: #D6CFC2 !important; }
-.stRadio label p { color: var(--text) !important; font-weight: 500; }
+[data-testid="stMain"] .stRadio label:hover { border-color: #D6CFC2 !important; }
+[data-testid="stMain"] .stRadio label p { color: var(--text) !important; font-weight: 500; }
 
 /* SELECTBOX */
 
@@ -990,9 +990,125 @@ hr {
 
 [data-testid="stCaptionContainer"] * { color: var(--muted) !important; }
 
+/* SIDEBAR */
+
+section[data-testid="stSidebar"] {
+    background: var(--surface) !important;
+    border-right: 1px solid var(--border) !important;
+}
+
+section[data-testid="stSidebar"] > div:first-child {
+    padding: 0 1rem 1.2rem !important;
+}
+
+[data-testid="stSidebarUserContent"] {
+    padding-top: 0 !important;
+}
+
+/* Sidebar brand */
+
+.hl-sidebar-brand {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    padding: 0.55rem 3rem 1rem 0;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 1.2rem;
+}
+
+.hl-sidebar-logo {
+    width: 30px;
+    height: 38px;
+    flex-shrink: 0;
+}
+
+.hl-sidebar-wordmark {
+    font-family: 'IBM Plex Serif', Georgia, serif;
+    font-size: 1.45rem;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    line-height: 1;
+    color: #111111 !important;
+    margin: 0;
+}
+
+.hl-sidebar-tagline {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.6rem;
+    letter-spacing: 0.16em;
+    color: #2D5F7C !important;
+    margin-top: 0.3rem;
+    text-transform: uppercase;
+}
+
+/* st.page_link nav items */
+
+[data-testid="stPageLink"] a,
+[data-testid="stPageLink-NavLink"] {
+    display: flex !important;
+    align-items: center !important;
+    padding: 0.65rem 0.9rem !important;
+    border-radius: 10px !important;
+    border: 1px solid transparent !important;
+    text-decoration: none !important;
+    transition: background 0.15s ease, border-color 0.15s ease;
+    margin-bottom: 0.1rem;
+}
+
+[data-testid="stPageLink"] a:hover,
+[data-testid="stPageLink-NavLink"]:hover {
+    background: var(--surface-soft) !important;
+    border-color: var(--border) !important;
+}
+
+[data-testid="stPageLink"] a[aria-current="page"],
+[data-testid="stPageLink-NavLink"][aria-current="page"] {
+    background: rgba(154, 52, 18, 0.07) !important;
+    border-color: rgba(154, 52, 18, 0.18) !important;
+}
+
+[data-testid="stPageLink"] span,
+[data-testid="stPageLink"] p {
+    font-size: 0.95rem !important;
+    font-weight: 500 !important;
+    color: var(--text) !important;
+}
+
+[data-testid="stPageLink"] a[aria-current="page"] span,
+[data-testid="stPageLink"] a[aria-current="page"] p {
+    color: var(--accent) !important;
+    font-weight: 600 !important;
+}
+
+/* RESPONSIVE — sidebar collapses natively on narrow viewports.
+   Tighten the main content padding on small screens. */
+
+@media (max-width: 768px) {
+    .block-container {
+        padding-left: 1rem !important;
+        padding-right: 1rem !important;
+    }
+
+    .track-row {
+        grid-template-columns: 32px 1fr !important;
+        gap: 0.6rem !important;
+    }
+
+    .track-bar-wrap,
+    .track-stats {
+        grid-column: 2;
+    }
+
+    .track-stats {
+        display: flex;
+        gap: 0.8rem;
+        align-items: baseline;
+        text-align: left !important;
+    }
+}
+
 /* OVERRIDES */
 
-section[data-testid="stSidebar"] { background: white !important; }
 .element-container div[data-testid="stMarkdownContainer"] { background: transparent !important; }
 
 code { background: #F3F4F6 !important; color: #111111 !important; }

@@ -2,15 +2,20 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"os"
 	"sync"
 	"time"
 
 	"github.com/joho/godotenv"
+	_ "github.com/lib/pq"
 	kafka "github.com/segmentio/kafka-go"
+	"github.com/segmentio/kafka-go/sasl/plain"
 
 	"github.com/yourname/hitlab/ingestion/deezer"
 	"github.com/yourname/hitlab/ingestion/itunes"
@@ -32,17 +37,68 @@ func main() {
 	it := itunes.NewClient()
 	log.Println("clients ready (lastfm + deezer + itunes)")
 
-	writer := &kafka.Writer{
-		Addr:     kafka.TCP(os.Getenv("KAFKA_BROKER")),
-		Topic:    os.Getenv("KAFKA_TOPIC"),
-		Balancer: &kafka.LeastBytes{},
+	// DIRECT_DB mode: no Kafka — write straight to PostgreSQL.
+	// Activated when TIMESCALEDB_URL is set and KAFKA_BROKER is not.
+	dbURL := os.Getenv("TIMESCALEDB_URL")
+	kafkaBroker := os.Getenv("KAFKA_BROKER")
+
+	if dbURL != "" && kafkaBroker == "" {
+		log.Println("mode: direct-to-db (no Kafka)")
+		db, err := sql.Open("postgres", dbURL)
+		if err != nil {
+			log.Fatalf("db open: %v", err)
+		}
+		defer db.Close()
+		if err := db.Ping(); err != nil {
+			log.Fatalf("db ping: %v", err)
+		}
+		log.Println("db connected")
+
+		if os.Getenv("RUN_ONCE") == "true" {
+			ingestDirect(lf, dz, it, db)
+			return
+		}
+		for {
+			ingestDirect(lf, dz, it, db)
+			log.Println("sleeping 1 minute...")
+			time.Sleep(1 * time.Minute)
+		}
 	}
+
+	// Kafka mode (local / Docker).
+	writer := newKafkaWriter()
 	defer writer.Close()
 
+	if os.Getenv("RUN_ONCE") == "true" {
+		ingest(lf, dz, it, writer)
+		return
+	}
 	for {
 		ingest(lf, dz, it, writer)
 		log.Println("sleeping 1 minute...")
 		time.Sleep(1 * time.Minute)
+	}
+}
+
+// newKafkaWriter builds a kafka.Writer with optional SASL/TLS for Upstash.
+// When KAFKA_USERNAME is set the writer uses SASL PLAIN over TLS.
+func newKafkaWriter() *kafka.Writer {
+	transport := &kafka.Transport{}
+
+	if user := os.Getenv("KAFKA_USERNAME"); user != "" {
+		transport.TLS = &tls.Config{}
+		transport.SASL = plain.Mechanism{
+			Username: user,
+			Password: os.Getenv("KAFKA_PASSWORD"),
+		}
+		log.Println("kafka: SASL/TLS enabled (Upstash)")
+	}
+
+	return &kafka.Writer{
+		Addr:      kafka.TCP(os.Getenv("KAFKA_BROKER")),
+		Topic:     os.Getenv("KAFKA_TOPIC"),
+		Balancer:  &kafka.LeastBytes{},
+		Transport: transport,
 	}
 }
 
@@ -151,4 +207,101 @@ func publish(tracks []track.Track, writer *kafka.Writer) {
 	}
 
 	log.Printf("published %d events to kafka", len(messages))
+}
+
+// ── Direct-to-DB mode (no Kafka) ─────────────────────────────────────────
+
+func ingestDirect(lf *lastfm.Client, dz *deezer.Client, it *itunes.Client, db *sql.DB) {
+	tracks := fetchAllCountries(lf)
+	if len(tracks) == 0 {
+		log.Println("no tracks fetched, skipping")
+		return
+	}
+	enrichAll(tracks, dz, it)
+	writeToDB(tracks, db)
+}
+
+// computeHypeScore mirrors the Python formula in transform/consumer.py.
+func computeHypeScore(listeners, geoSpread, deezerRank int64) float64 {
+	reach := math.Min(math.Log10(float64(listeners+1))/7.0, 1.0)
+	geo := math.Min(float64(geoSpread)/10.0, 1.0)
+	rank := 0.0
+	if deezerRank > 0 {
+		rank = math.Min(float64(deezerRank)/1_000_000.0, 1.0)
+	}
+	return math.Round((reach*0.30+geo*0.25+rank*0.25)*100*100) / 100
+}
+
+func writeToDB(tracks []track.Track, db *sql.DB) {
+	now := time.Now().UTC()
+
+	// Compute geo_spread per (name, artist) across the whole batch.
+	type key struct{ name, artist string }
+	spread := make(map[key]map[string]struct{})
+	for _, t := range tracks {
+		k := key{t.Name, t.Artist}
+		if spread[k] == nil {
+			spread[k] = make(map[string]struct{})
+		}
+		spread[k][t.Country] = struct{}{}
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		log.Printf("db begin: %v", err)
+		return
+	}
+	stmt, err := tx.Prepare(`
+		INSERT INTO track_events
+			(time, track_name, artist, country, listeners, playcount,
+			 deezer_rank, duration, genre, release_date, geo_spread, hype_score)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+	`)
+	if err != nil {
+		log.Printf("db prepare: %v", err)
+		tx.Rollback()
+		return
+	}
+	defer stmt.Close()
+
+	written := 0
+	for _, t := range tracks {
+		k := key{t.Name, t.Artist}
+		geo := int64(len(spread[k]))
+		score := computeHypeScore(t.Listeners, geo, t.DeezerRank)
+
+		var releaseDate *string
+		if t.ReleaseDate != "" {
+			releaseDate = &t.ReleaseDate
+		}
+		var deezerRank *int64
+		if t.DeezerRank > 0 {
+			deezerRank = &t.DeezerRank
+		}
+		var duration *int
+		if t.Duration > 0 {
+			duration = &t.Duration
+		}
+		var genre *string
+		if t.Genre != "" {
+			genre = &t.Genre
+		}
+
+		if _, err := stmt.Exec(
+			now, t.Name, t.Artist, t.Country,
+			t.Listeners, t.Playcount,
+			deezerRank, duration, genre, releaseDate,
+			geo, score,
+		); err != nil {
+			log.Printf("db insert error: %v", err)
+			continue
+		}
+		written++
+	}
+
+	if err := tx.Commit(); err != nil {
+		log.Printf("db commit: %v", err)
+		return
+	}
+	log.Printf("wrote %d events directly to db", written)
 }

@@ -26,12 +26,17 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 log = logging.getLogger("hitlab.transform")
 
 
-KAFKA_BROKER = os.getenv("KAFKA_BROKER", "localhost:29092")
-KAFKA_TOPIC = os.getenv("KAFKA_TOPIC", "track-events")
-DB_URL = os.getenv("TIMESCALEDB_URL", "postgres://hitlab:hitlab@localhost:5432/hitlab")
+KAFKA_BROKER   = os.getenv("KAFKA_BROKER",    "localhost:29092")
+KAFKA_TOPIC    = os.getenv("KAFKA_TOPIC",     "track-events")
+KAFKA_USERNAME = os.getenv("KAFKA_USERNAME",  "")
+KAFKA_PASSWORD = os.getenv("KAFKA_PASSWORD",  "")
+DB_URL         = os.getenv("TIMESCALEDB_URL", "postgres://hitlab:hitlab@localhost:5432/hitlab")
 
-BATCH_SIZE = 50          # flush every N messages...
-BATCH_TIMEOUT_S = 10     # ...or every T seconds, whichever comes first
+BATCH_SIZE      = 50   # flush every N messages…
+BATCH_TIMEOUT_S = 10   # …or every T seconds, whichever comes first
+# MAX_RUNTIME_S: when set the consumer exits cleanly after this many seconds.
+# Used by GitHub Actions so the step doesn't hang forever.
+MAX_RUNTIME_S   = int(os.getenv("MAX_RUNTIME_S", "0"))
 
 
 def compute_hype_score(listeners: int, geo_spread: int, deezer_rank: int) -> float:
@@ -108,30 +113,51 @@ def flush(batch: list[dict], conn) -> None:
     log.info("wrote %d events to timescaledb", len(rows))
 
 
-def main():
-    consumer = KafkaConsumer(
-        KAFKA_TOPIC,
-        bootstrap_servers=KAFKA_BROKER,
+def _build_consumer() -> KafkaConsumer:
+    """Build a KafkaConsumer with optional SASL/TLS for Upstash."""
+    kwargs: dict = dict(
         auto_offset_reset="earliest",
         enable_auto_commit=True,
         group_id="hitlab-transform",
         value_deserializer=lambda m: json.loads(m.decode("utf-8")),
+        consumer_timeout_ms=MAX_RUNTIME_S * 1000 if MAX_RUNTIME_S else float("inf"),
     )
+    if KAFKA_USERNAME:
+        kwargs.update(
+            security_protocol="SASL_SSL",
+            sasl_mechanism="PLAIN",
+            sasl_plain_username=KAFKA_USERNAME,
+            sasl_plain_password=KAFKA_PASSWORD,
+        )
+        log.info("kafka: SASL/SSL enabled (Upstash)")
+    return KafkaConsumer(KAFKA_TOPIC, bootstrap_servers=KAFKA_BROKER, **kwargs)
+
+
+def main():
+    consumer = _build_consumer()
     log.info("kafka consumer connected to %s", KAFKA_BROKER)
 
     conn = psycopg2.connect(DB_URL)
-    log.info("timescaledb connected")
+    log.info("db connected")
 
     batch: list[dict] = []
     last_flush = time.time()
+    deadline = (time.time() + MAX_RUNTIME_S) if MAX_RUNTIME_S else None
 
     for message in consumer:
         batch.append(message.value)
 
-        if len(batch) >= BATCH_SIZE or (time.time() - last_flush) > BATCH_TIMEOUT_S:
+        now = time.time()
+        if len(batch) >= BATCH_SIZE or (now - last_flush) > BATCH_TIMEOUT_S:
             flush(batch, conn)
             batch = []
-            last_flush = time.time()
+            last_flush = now
+
+        if deadline and time.time() >= deadline:
+            log.info("MAX_RUNTIME_S reached — flushing and exiting")
+            break
+
+    flush(batch, conn)  # final flush
 
 
 if __name__ == "__main__":

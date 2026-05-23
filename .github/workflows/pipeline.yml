@@ -1,0 +1,28 @@
+name: HitLab Pipeline
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"   # every 30 minutes
+  workflow_dispatch:           # manual trigger from GitHub UI
+
+jobs:
+  ingest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    env:
+      TIMESCALEDB_URL: ${{ secrets.TIMESCALEDB_URL }}
+      LASTFM_API_KEY:  ${{ secrets.LASTFM_API_KEY }}
+      RUN_ONCE:        "true"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache-dependency-path: ingestion/go.sum
+
+      - name: Run ingestion (fetch → enrich → write to Supabase)
+        working-directory: ingestion
+        run: go run .

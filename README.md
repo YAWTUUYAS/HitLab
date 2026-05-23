@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo.svg" alt="HitLab" width="180"/>
+</p>
+
 # HitLab ⚗️
 
 > *What's the formula for a hit track?*

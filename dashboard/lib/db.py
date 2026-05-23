@@ -18,9 +18,27 @@ DB_URL = os.getenv(
 
 
 @st.cache_resource
+def _connection_holder() -> dict:
+    """Holds a single mutable connection dict so we can replace it on reconnect."""
+    return {"conn": psycopg2.connect(DB_URL)}
+
+
 def get_connection():
-    conn = psycopg2.connect(DB_URL)
-    conn.autocommit = True
+    """Return a live psycopg2 connection, reconnecting if Neon closed it."""
+    holder = _connection_holder()
+    conn = holder["conn"]
+    try:
+        # Lightweight ping — catches stale connections before callers use them.
+        with conn.cursor() as cur:
+            cur.execute("SELECT 1")
+    except psycopg2.Error:
+        try:
+            conn.close()
+        except Exception:
+            pass
+        holder["conn"] = psycopg2.connect(DB_URL)
+        holder["conn"].autocommit = True
+        conn = holder["conn"]
     return conn
 
 

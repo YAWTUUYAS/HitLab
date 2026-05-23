@@ -11,7 +11,7 @@ jobs:
     timeout-minutes: 5
 
     env:
-      TIMESCALEDB_URL: ${{ secrets.TIMESCALEDB_URL }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
       LASTFM_API_KEY:  ${{ secrets.LASTFM_API_KEY }}
       RUN_ONCE:        "true"
 

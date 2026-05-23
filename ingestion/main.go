@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"net/url"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -27,6 +29,32 @@ var countries = []string{"US", "GB", "FR", "DE", "BR", "MX", "NG", "JP", "ES", "
 
 const enrichWorkers = 5
 
+// urlToDSN converts a postgres:// URL into a lib/pq key=value DSN.
+// This avoids URL-parsing edge cases with dots in usernames or special
+// characters in passwords (e.g. Supabase pooler: user=postgres.PROJECT_REF).
+func urlToDSN(rawURL string) string {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return rawURL // fallback: use as-is
+	}
+	user := u.User.Username()
+	pass, _ := u.User.Password()
+	host := u.Hostname()
+	port := u.Port()
+	if port == "" {
+		port = "5432"
+	}
+	dbname := strings.TrimPrefix(u.Path, "/")
+	sslmode := u.Query().Get("sslmode")
+	if sslmode == "" {
+		sslmode = "require"
+	}
+	return fmt.Sprintf(
+		"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
+		host, port, user, pass, dbname, sslmode,
+	)
+}
+
 func main() {
 	if err := godotenv.Load(); err != nil {
 		log.Println("no .env file found, reading from environment")
@@ -38,13 +66,13 @@ func main() {
 	log.Println("clients ready (lastfm + deezer + itunes)")
 
 	// DIRECT_DB mode: no Kafka — write straight to PostgreSQL.
-	// Activated when TIMESCALEDB_URL is set and KAFKA_BROKER is not.
-	dbURL := os.Getenv("TIMESCALEDB_URL")
+	// Activated when DATABASE_URL is set and KAFKA_BROKER is not.
+	dbURL := os.Getenv("DATABASE_URL")
 	kafkaBroker := os.Getenv("KAFKA_BROKER")
 
 	if dbURL != "" && kafkaBroker == "" {
 		log.Println("mode: direct-to-db (no Kafka)")
-		db, err := sql.Open("postgres", dbURL)
+		db, err := sql.Open("postgres", urlToDSN(dbURL))
 		if err != nil {
 			log.Fatalf("db open: %v", err)
 		}

@@ -19,7 +19,7 @@ if [[ -f .env ]]; then
 fi
 export KAFKA_BROKER="localhost:29092"
 export KAFKA_TOPIC="${KAFKA_TOPIC:-track-events}"
-export TIMESCALEDB_URL="postgres://hitlab:hitlab@localhost:5432/hitlab"
+export DATABASE_URL="postgres://hitlab:hitlab@localhost:5432/hitlab"
 
 LOGS="$ROOT/.run_logs"
 mkdir -p "$LOGS"

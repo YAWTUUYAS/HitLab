@@ -12,7 +12,7 @@ import streamlit as st
 
 
 DB_URL = os.getenv(
-    "TIMESCALEDB_URL",
+    "DATABASE_URL",
     "postgres://hitlab:hitlab@localhost:5432/hitlab",
 )
 

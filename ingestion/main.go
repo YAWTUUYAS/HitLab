@@ -240,6 +240,7 @@ func publish(tracks []track.Track, writer *kafka.Writer) {
 // ── Direct-to-DB mode (no Kafka) ─────────────────────────────────────────
 
 func ingestDirect(lf *lastfm.Client, dz *deezer.Client, it *itunes.Client, db *sql.DB) {
+	purgeOldEvents(db)
 	tracks := fetchAllCountries(lf)
 	if len(tracks) == 0 {
 		log.Println("no tracks fetched, skipping")
@@ -247,6 +248,19 @@ func ingestDirect(lf *lastfm.Client, dz *deezer.Client, it *itunes.Client, db *s
 	}
 	enrichAll(tracks, dz, it)
 	writeToDB(tracks, db)
+}
+
+// purgeOldEvents deletes events older than 7 days to keep storage bounded.
+func purgeOldEvents(db *sql.DB) {
+	res, err := db.Exec(`DELETE FROM track_events WHERE time < NOW() - INTERVAL '7 days'`)
+	if err != nil {
+		log.Printf("purge error: %v", err)
+		return
+	}
+	n, _ := res.RowsAffected()
+	if n > 0 {
+		log.Printf("purged %d events older than 7 days", n)
+	}
 }
 
 // computeHypeScore mirrors the Python formula in transform/consumer.py.

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo.svg" alt="HitLab" width="340"/>
+  <img src="assets/HitLab_white-background.png" alt="HitLab" width="420"/>
 </p>
 
 <p align="center">

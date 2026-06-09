@@ -11,7 +11,7 @@
 
     --border: #E7E2D9;
 
-    --accent: #9A3412;
+    --accent: #A8410D;
     --accent-soft: #C2410C;
 
     --positive: #3F6212;
@@ -1007,38 +1007,17 @@ section[data-testid="stSidebar"] > div:first-child {
 
 /* Sidebar brand */
 
-.hl-sidebar-brand {
-    display: flex;
-    align-items: center;
-    gap: 0.85rem;
-    padding: 0.55rem 3rem 1rem 0;
+[data-testid="stSidebar"] [data-testid="stImage"] {
+    padding: 0.4rem 0.2rem 0 0.2rem;
+}
+
+[data-testid="stSidebar"] [data-testid="stImage"] img {
+    border-radius: 4px;
+}
+
+.hl-sidebar-divider {
     border-bottom: 1px solid var(--border);
-    margin-bottom: 1.2rem;
-}
-
-.hl-sidebar-logo {
-    width: 30px;
-    height: 38px;
-    flex-shrink: 0;
-}
-
-.hl-sidebar-wordmark {
-    font-family: 'IBM Plex Serif', Georgia, serif;
-    font-size: 1.45rem;
-    font-weight: 700;
-    letter-spacing: -0.03em;
-    line-height: 1;
-    color: #111111 !important;
-    margin: 0;
-}
-
-.hl-sidebar-tagline {
-    font-family: 'IBM Plex Mono', monospace;
-    font-size: 0.6rem;
-    letter-spacing: 0.16em;
-    color: #2D5F7C !important;
-    margin-top: 0.3rem;
-    text-transform: uppercase;
+    margin: 0.75rem 0 1rem 0;
 }
 
 /* st.page_link nav items */
